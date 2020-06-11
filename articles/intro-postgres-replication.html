@@ -6,7 +6,7 @@
     <meta name="description" content="A quick introduction to how to configure PostgreSQL 12 in order to have a master and read-only replicas." />
   </head>
   <body>
-    <h2>Introduction to Replication in PostgreSQL 12 with Docker</h2>
+    <h1>Introduction to Replication in PostgreSQL 12 with Docker</h1>
     <h5 class="subtitle">written by <a href="https://linkedin.com/in/sorinsi">Sorin</a> - 2020/06/11</h5>
     <hr/>
     <ol>
@@ -27,28 +27,32 @@
         </li>
     </ol>
     <hr/>
-    <h4 id="#introduction">Introduction</h4>
+    <h3 id="#introduction">Introduction</h3>
     
     <p>
         Before we start I have to say that I’m using Docker for this because it very easy to have
-        multiple instances running at the same time with it.
-    </p><p>
+        multiple instances of Postgres running at the same time with it.
+    </p>
+    <p>
         In this introduction I will try to show you how to configure the Streaming Replication
-        technique and different paths you can take to set it up.
-    </p><p>
+        technique. <strong>I won’t explain how to configure Postgres for high availability or failover</strong> because it is
+        outside the scope of this introduction, but you can configure the
+        restore_command, archive_command, use replication slots, increase wal_keep_segments and have a promote_trigger_file to automatically
+        promote the replica to master or do it manually. (<a href="https://www.postgresql.org/docs/12/high-availability.html" target="_blank">More information here</a>)
+    </p>
+    <p>
         Streaming Replication works by streaming WAL records as soon as possible instead of
-        waiting for the complete WAL file to be filled. This comes with its advantages and
-        disadvantages and you have to choose accordingly. One big advantage is that it allows
-        the replicas to stay more up to date with the master and one big disadvantage is that
-        exclusive locks on master will conflict with queries on the read-only replica.
+        waiting for the complete WAL file to be filled like in a file-based log shipping.
+        This comes with its advantages and disadvantages and you have to choose accordingly. 
+        One big advantage is that it allows the replicas to stay more up to date with the master.
     </p><p>
-        In my personal opinion, file-based log shipping would be better to use only when you
+        My personal opinion is that file-based log shipping would be better to use only when you
         want to have a live backup of the primary database because if you want to use it for a
         read-only replica you have a bigger window for problems to slip in with inconsistencies
         and data loss if the master fails.
     </p>
 
-    <h4 id="docker">Docker configuration</h4>
+    <h3 id="docker">Docker configuration</h3>
     
     <p>
         Now we have to configure our containers in order to connect a master and replica
@@ -78,7 +82,7 @@
         > docker network connect demo master
     </code>
     <code>
-        > docker network connect demo master
+        > docker network connect demo replica
     </code>
     <code>
         > docker container ls
@@ -130,10 +134,10 @@
     <p>
         We extracted the IPs (172.21.0.*) needed and the subnet mask (/16).
     </p>
-    <h4 id="master">Master configuration</h4>
+    <h3 id="master">Master configuration</h3>
     <p>
         In order to configure the master correctly we must create a new user with replication
-        permissions and in order to do that we have to run the following commands:
+        permissions and to do that we have to run the following commands:
     </p>
     <code>
         > docker exec -it master su - postgres
@@ -195,7 +199,7 @@
     <code>
         > docker container restart master
     </code>
-    <h4 id="replica">Replica configuration</h4>
+    <h3 id="replica">Replica configuration</h3>
     <p>
         In order to use our replica we must make an initial backup first by using the
         pg_basebackup command:
@@ -211,27 +215,33 @@
         standby.signal file) and when it finishes copying files we will have everything ready.
     </p>
     <p>
-        I won’t explain how to configure Postgres for high availability or for failover because it is
-        outside the scope of this introduction to replication but you can configure the
-        restore_command, archive_command and have a promote_trigger_file to automatically
-        promote the replica to master or do it manually.
+        Let's see if our configuration works:
+    </p>
+    <code>
+        > docker exec -it replica su - postgres
+    </code>
+    <code>
+        > psql
+    </code>
+    <code>
+        > drop database postgres;
+    </code>
+    <code>
+        ERROR: cannot execute DROP DATABASE in a read-only transaction
+    </code>
+    <p>
+        Apparently it works as expected and it allows read-only queries.
     </p>
     <p>
-        When I say that it is outside of the scope of this introduction to show that it is because
-        you have to control what happens in the case that master fails and replica assumes that
-        position and after that master wakes again or what happens if master fails and replica
-        fails too.
-    </p>
-    <p>
-        Having said that, you should also consider which type of streaming would be better for
+        You should consider which type of streaming would be better for
         your architecture. You can use async or sync, if data consistency matters above all else
         you may be better off using this technique in a sync mode instead of using the default
         async mode. Using sync comes at the cost of performance because master will wait until
         everything is committed to all replicas.
     </p>
-    <h4 id="conclusion">Conclusion</h4>
+    <h3 id="conclusion">Conclusion</h3>
     <p>
-        This was a very small introduction on how to configure a master and replica and keeping
+        This was a very small introduction in how to configure a master and replica and keeping
         them up to date using the Streaming Replication technique in async mode.
     </p>
     <p>
@@ -239,8 +249,5 @@
         may cost less to maintain it by yourself and have the correct configuration for your
         architecture.
     </p>
-
-
-
   </body>
 </html> 

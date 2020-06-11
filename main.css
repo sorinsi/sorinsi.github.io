@@ -1,8 +1,43 @@
 body, html {
-    height:297mm;
-    width:210mm;
+    max-width:1000px;
     margin: 0 auto;
-    background-color: white;
+    background-color: #FCFCFC;
     font-family: 'regular-font';
     padding: 10px;
+    box-sizing: border-box;
+    font-family: 'Arial';
+}
+
+li {
+    margin: 10px;
+}
+
+code {
+    background-color: #eee;
+    border: 1px solid #999;
+    display: block;
+    padding: 20px;
+    margin: 8px;
+    word-break: normal;
+    word-wrap: normal;
+}
+
+.block {
+    margin: 4px;
+}
+
+.subtitle {
+    margin-top: -8px;
+    font-weight: normal;
+}
+
+table {
+    border-spacing: 12px;
+}
+
+hr {
+    height: 2px;
+    color: #eaeaea;
+    background-color: #eaeaea;
+    border: none;
 }

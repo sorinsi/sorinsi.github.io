@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="../main.css" />
+    <title>Introduction to Replication in PostgreSQL 12 with Docker</title>
+    <meta name="description" content="A quick introduction to how to configure PostgreSQL 12 in order to have a master and read-only replicas." />
+  </head>
+  <body>
+    <h2>Introduction to Replication in PostgreSQL 12 with Docker</h2>
+    <h5 class="subtitle">written by <a href="https://linkedin.com/in/sorinsi">Sorin</a></h5>
+    <hr/>
+    <ol>
+        <li>
+            <a href="#introduction">Introduction</a>
+        </li>
+        <li>
+            <a href="#docker">Docker configuration</a>
+        </li>
+        <li>
+            <a href="#master">Master configuration</a>
+        </li>
+        <li>
+            <a href="#replica">Replica configuration</a>
+        </li>
+        <li>
+            <a href="#conclusion">Conclusion</a>
+        </li>
+    </ol>
+    <hr/>
+    <h4 id="#introduction">Introduction</h4>
+    
+    <p>
+        Before we start I have to say that I’m using Docker for this because it very easy to have
+        multiple instances running at the same time with it.
+    </p><p>
+        In this introduction I will try to show you how to configure the Streaming Replication
+        technique and different paths you can take to set it up.
+    </p><p>
+        Streaming Replication works by streaming WAL records as soon as possible instead of
+        waiting for the complete WAL file to be filled. This comes with its advantages and
+        disadvantages and you have to choose accordingly. One big advantage is that it allows
+        the replicas to stay more up to date with the master and one big disadvantage is that
+        exclusive locks on master will conflict with queries on the read-only replica.
+    </p><p>
+        In my personal opinion, file-based log shipping would be better to use only when you
+        want to have a live backup of the primary database because if you want to use it for a
+        read-only replica you have a bigger window for problems to slip in with inconsistencies
+        and data loss if the master fails.
+    </p>
+
+    <h4 id="docker">Docker configuration</h4>
+    
+    <p>
+        Now we have to configure our containers in order to connect a master and replica
+        together.
+    </p>
+
+    <code>
+        > docker run -d --name master --publish-all --env POSTGRES_PASSWORD=root --volume ~/Desktop/master:/var/lib/postgresql/data postgres:latest
+    </code>
+    <code>
+        > docker run -d --name replica --publish-all --env POSTGRES_PASSWORD=root --volume ~/Desktop/replica:/var/lib/postgresql/data postgres:latest
+    </code>
+
+    <p>
+        I am using —name flag to give a name to each container because we are going to use
+        that name later and it is easier to access and complete the configuration if we don’t have
+        to copy the container id. The —publish-all flag is to to publish all exposed ports to a
+        random port in order to be able to access it and the —volume flag to persist data.
+    </p>
+    <p>
+        Now we must connect both containers to the same network.
+    </p>
+    <code>
+        > docker network create demo
+    </code>
+    <code>
+        > docker network connect demo master
+    </code>
+    <code>
+        > docker network connect demo master
+    </code>
+    <code>
+        > docker container ls
+    </code>
+    <code>
+        <table >
+            <tbody>
+                <tr>
+                    <th>CONTAINER ID</th>
+                    <th>IMAGE</th>
+                    <th>COMMAND</th>
+                    <th>CREATED</th>
+                    <th>STATUS</th>
+                    <th>PORTS</th>
+                    <th>NAMES</th>
+                </tr>
+                <tr>
+                    <td>0946e750ae4a</td>
+                    <td>postgres:latest</td>
+                    <td>"docker-entrypoint.s..."</td>
+                    <td>About a minute ago</td>
+                    <td>Up About a minute</td>
+                    <td>0.0.0.0:32785->5432/tcp</td>
+                    <td>replica</td>
+                </tr>
+                <tr>
+                    <td>6aa67f9cd254</td>
+                    <td>postgres:latest</td>
+                    <td>"docker-entrypoint.s..."</td>
+                    <td>About a minute ago</td>
+                    <td>Up About a minute</td>
+                    <td>0.0.0.0:32784->5432/tcp</td>
+                    <td>master</td>
+                </tr>
+            </tbody>
+        </table>
+    </code>
+    <p>
+        We can see that our containers are exposed at port 32785 and 32784 for
+        us but we also need the internal IP where containers communicate between
+        themselves:
+    </p>
+    <code>
+        > docker network inspect --format '{{range $k, $v := .Containers}} (Name: {{$v.Name}} - IP: {{$v.IPv4Address}}) {{end}}' demo
+    </code>
+    <code>
+        (Name: replica - IP: 172.21.0.3/16) (Name: master - IP: 172.21.0.2/16)
+    </code>
+    <p>
+        We extracted the IPs (172.21.0.*) needed and the subnet mask (/16).
+    </p>
+    <h4 id="master">Master configuration</h4>
+    <p>
+        In order to configure the master correctly we must create a new user with replication
+        permissions and in order to do that we have to run the following commands:
+    </p>
+    <code>
+        > docker exec -it master su - postgres
+    </code>
+    <code>
+        > psql
+    </code>
+    <code>
+        > create role repl with replication login encrypted password ‘secret’;
+    </code>
+    <p>
+        We connected to the container, changed the user to Postgres and executed a query that
+        creates a new user for our database.
+    </p>
+    <p>
+        Now we would have to modify a few lines in the postgresql.conf file but Postgres 12
+        comes with defaults that allow us to move forward without configuring too much but if
+        you want to make sure that your configuration is good you should make sure that you
+        have the following configuration:
+    </p>
+    <p>
+        wal_level = replica
+        max_replication_slots > 0
+        max_wal_senders > 0
+    </p>
+    <p>
+        You should change the values accordingly to your setup and number of replicas. A zero
+        value usually means that it will be disabled.
+    </p>
+    <p>
+        To configure the access for the replication user in order to allow connections in the
+        pg_hba.conf file we must add the following line at the end:
+    </p>
+    <code>
+        <table >
+            <tbody>
+                <tr>
+                    <th>TYPE</th>
+                    <th>DATABASE</th>
+                    <th>USER</th>
+                    <th>ADDRESS</th>
+                    <th>METHOD</th>
+                </tr>
+                <tr>
+                    <td>host</td>
+                    <td>replication</td>
+                    <td>repl</td>
+                    <td>172.21.0.3/16</td>
+                    <td>md5</td>
+                </tr>
+            </tbody>
+        </table>
+    </code>
+    <p>
+        Once we modified all this files we have to restart Postgres in order to load the correct
+        configuration files, we can either do this with Docker or pg_ctl, in this case I will do it with
+        Docker:
+    </p>
+    <code>
+        > docker container restart master
+    </code>
+    <h4 id="replica">Replica configuration</h4>
+    <p>
+        In order to use our replica we must make an initial backup first by using the
+        pg_basebackup command:
+    </p>
+    <code>
+        > docker exec -it replica bash
+    </code>
+    <code>
+        > pg_basebackup -h 172.21.0.2 -U repl -D /var/lib/postgresql/data -P -R
+    </code>
+    <p>
+        You have to use the -R flag because it will create all the necessary files for the replica (a
+        standby.signal file) and when it finishes copying files we will have everything ready.
+    </p>
+    <p>
+        I won’t explain how to configure Postgres for high availability or for failover because it is
+        outside the scope of this introduction to replication but you can configure the
+        restore_command, archive_command and have a promote_trigger_file to automatically
+        promote the replica to master or do it manually.
+    </p>
+    <p>
+        When I say that it is outside of the scope of this introduction to show that it is because
+        you have to control what happens in the case that master fails and replica assumes that
+        position and after that master wakes again or what happens if master fails and replica
+        fails too.
+    </p>
+    <p>
+        Having said that, you should also consider which type of streaming would be better for
+        your architecture. You can use async or sync, if data consistency matters above all else
+        you may be better off using this technique in a sync mode instead of using the default
+        async mode. Using sync comes at the cost of performance because master will wait until
+        everything is committed to all replicas.
+    </p>
+    <h4 id="conclusion">Conclusion</h4>
+    <p>
+        This was a very small introduction on how to configure a master and replica and keeping
+        them up to date using the Streaming Replication technique in async mode.
+    </p>
+    <p>
+        Sometimes it is easier to just use a DaaS (Database as a Service) but if you have the time to learn about the software you’re using it
+        may cost less to maintain it by yourself and have the correct configuration for your
+        architecture.
+    </p>
+
+
+
+  </body>
+</html> 

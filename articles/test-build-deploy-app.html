@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" href="../main.css" />
+    <title>Test, build and deploy your Android application with a CI</title>
+    <meta name="description" content="We will see how to test, build and deploy our application with a CI." />
+  </head>
+  <body>
+    <h1>Test, build and deploy your React Native application with a CI</h1>
+    <h5 class="subtitle">written by <a href="https://linkedin.com/in/sorinsi">Sorin</a> - 2020/07/05</h5>
+    <hr/>
+    <ol>
+        <li>
+            <a href="#introduction">Introduction</a>
+        </li>
+        <li>
+            <a href="#ci">Gitab CI</a>
+        </li>
+        <li>
+            <a href="#test">Test</a>
+        </li>
+        <li>
+            <a href="#build">Build</a>
+        </li>
+        <li>
+            <a href="#deploy">Deploy</a>
+        </li>
+        <li>
+            <a href="#conclusion">Conclusion</a>
+        </li>
+    </ol>
+    <hr/>
+    <h3 id="#introduction">Introduction</h3>
+    <p>
+       Most CI/CD examples use Fastlane to deploy the application but we will use Gitlab CI and Appcenter CLI to do everything which is way easier to configure.
+    </p>
+    <p>
+       <strong>In this example I will only build and deploy for Android but I will give pointers on how to do it for iOS because the configuration won't change much between platforms.</strong>
+    </p>
+    <p>
+        Short summary of what we will be doing:
+       <ol>
+           <li>Test our React Native application</li>
+           <li>Increment version code</li>
+           <li>Set version name</li>
+           <li>Build application for Android</li>
+           <li>Set release notes</li>
+           <li>Deploy the application to Beta</li>
+       </ol>
+    </p>
+    <h3 id="#ci">Gitlab CI</h3>
+    <p>
+        We must define a base for our CI in order to be able to share configuration between jobs.
+    </p>    
+    <p>
+        Please read the comments in the code below for an explanation about what we do.   
+    </p>
+<code><pre>
+# We will use this to rename our builds
+variables:
+  ANDROID_FILE: myapp.aab
+
+stages:
+  - test
+  - build
+  - deploy
+
+# We want to save the node_modules files
+# between jobs in order to save time
+cache: &global_cache
+  key: $CI_COMMIT_REF_NAME
+  paths:
+    - node_modules/
+
+# This is a template that can be reused for
+# Android and iOS.
+.job_template: &assemble
+  stage: build
+  # Only pull, previous job will already create the cache we need
+  cache:
+    <<: *global_cache
+    policy: pull
+  after_script:
+    - cp $OUTPUT_PATH $FILE
+  artifacts:
+    name: $FILE
+    paths:
+    - $FILE
+    expire_in: 5 days
+  only:
+    - tags
+</pre></code>
+<p>
+    We will define the $FILE and $OUTPUT_PATH variable later.
+</p>
+    <h3 id="#test">Test</h3>
+    <p>
+        This is the easiest step of all, we simply use the Alpine version of Node for Docker in order to test our application.
+    </p>
+    <p>
+        I am using an older version of Node in this case because there are a few libraries that won't build correctly on
+        newer versions.
+    </p>
+<code><pre>
+test:
+    image: node:10.19-alpine3.10
+    stage: test
+    cache:
+        <<: *global_cache
+        policy: pull-push
+    only:
+        - master
+        - develop
+        - tags
+    script:
+        - npm install
+        - npm test
+</pre></code>
+    <h3 id="#test">Build</h3>
+    <p>
+        This is the most complex step in our example on how to configure everything.
+    </p>
+    <p>
+        First of all, check this official guide on <a href="https://reactnative.dev/docs/signed-apk-android" target="_blank">"Publishing to Google Play Store"</a>. You need to generate a keystore in
+        order to sign your application bundle and configure a few gradle properties that we will change later.
+    </p>
+    <p>
+        After that you must prepare your envs and set them up in Gitlab in the CI & CD section. Please remember to not commit nor push your keystore to the repository.
+    </p>
+    <p>
+        In order to use the keystore file in our pipeline we will encode it with base64.
+    </p>
+    <code><pre>
+# You can export the base64 to a file or to stodut.
+base64 myapp.keystore > base64keystore.txt
+    </pre></code>
+    <code>vim base64keystore.txt</code>
+    <p>
+        Copy the content of base64keystore.txt and save it as a file in the variables section in Gitlab. 
+        You also need to set up <strong>KEYSTORE_PASSWORD</strong> and <strong>KEYSTORE_ALIAS</strong> there (I will be using the same string for storePassword and keyPassword).
+    </p>
+    <p>
+        Now instead of using gradle.properties to retrieve the keystore alias, path and password for our build we will use the ENV.
+    </p>
+<code><pre>
+def keystorePath = System.getenv("MYAPP_UPLOAD_STORE_FILE")
+</pre></code>
+<code><pre>
+storePassword System.getenv("KEYSTORE_PASSWORD")
+keyAlias System.getenv("KEYSTORE_ALIAS")
+keyPassword System.getenv("KEYSTORE_PASSWORD")
+</pre></code>
+<code><pre>
+versionCode System.getenv("MYAPP_VERSION_CODE") as Integer ?: 1
+versionName System.getenv("MYAPP_VERSION_NAME") ?: "0.0.0"
+</pre></code>
+<p>
+    Once we have gradle ready to accept envs we write the bash script needed in order to work with our CI.
+</p>
+<code><pre>
+#!/usr/bin/env bash
+set -e
+
+if [[ -z "$CI_COMMIT_TAG" ]] && [[ -z "$KEYSTORE_ALIAS" ]] && [[ -z "$KEYSTORE_PASSWORD" ]] && [[ -z "$KEYSTORE" ]]
+then
+    echo "You forgot to define a few envs"
+    exit 1
+fi
+
+if [[ $CI_COMMIT_TAG =~ ^[0-9]{1,2}.[0-9]{1,2}.[0-9]{1,2}$ ]]
+then
+    TAGS_COUNT=`git tag | wc -l`
+
+    # If you already have a few versions on the Play Store you can use an initial
+    # version and start from there.
+    VERSION_CODE=$(( 11 + $TAGS_COUNT ))
+
+    # Could be a random string
+    KEYSTORE_NAME=myapp.keystore
+
+    echo "Retrieving tags count ($TAGS_COUNT) to use for application version code"
+
+    # Gradle fails to find vars passed from Gitlab
+    # Thats why we export it again here
+    export MYAPP_VERSION_CODE=$VERSION_CODE
+    export MYAPP_VERSION_NAME=$CI_COMMIT_TAG
+    export MYAPP_UPLOAD_STORE_FILE=$KEYSTORE_NAME
+    export KEYSTORE_ALIAS=$KEYSTORE_ALIAS
+    export KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD
+
+    base64 -d $KEYSTORE > ./android/app/$KEYSTORE_NAME
+
+    echo "Building with version code $MYAPP_VERSION_CODE and version name $MYAPP_VERSION_NAME"
+    cd android && ./gradlew clean && ./gradlew bundleRelease
+else
+    echo "Incorrect tag"
+    exit 1
+fi
+</pre></code>
+<p>
+    With the bash script done (I named it build-release.sh) the only thing left to set up is our CI job.
+</p>
+<code><pre>
+android:build:
+  image: sopromo/react-native:1.0
+  variables:
+    FILE: $ANDROID_FILE
+    OUTPUT_PATH: android/app/build/outputs/bundle/release/app.aab
+  <<: *assemble
+  script:
+    - bash build-release.sh
+
+</pre></code>
+    <h3 id="#test">Deploy</h3>
+    <p>
+        For deployment we will use <a href="https://appcenter.ms/" target="_blank">Appcenter</a> which is free for us. You should have an account there (it isn't required to give them
+        any access to your repository).
+    </p>
+    <p>
+        After creating an account you should follow their guide to <a href="https://docs.microsoft.com/en-us/appcenter/distribution/stores/googleplay" target="_blank">connect the Google Play Store with the Appcenter</a>.
+    </p>
+    <p>
+        Now configure a new variable in the Gitlab variables section and add your Appcenter token there.
+    </p>
+    <p>
+        The only thing left to do now is configure the CI to deploy our application to a track (Alpha, Beta, Production).
+    </p>
+    <code><pre>
+android:beta:
+  image: sopromo/node-appcenter-git:alpine
+  stage: deploy
+  cache: {}
+  only:
+    - tags
+  dependencies:
+    - android:build
+  needs:
+    - job: android:build
+      artifacts: true
+  script:
+    # We extract the release notes for this version from the tag message.
+    - export TAG_MESSAGE=$(git tag -l --format='%(contents)' $CI_COMMIT_TAG)
+    - appcenter login --token $APPCENTER_TOKEN
+    - appcenter distribute stores publish --file $ANDROID_FILE --store Beta --app APPCENTER_APP --release-notes "$TAG_MESSAGE"
+    </pre></code>
+    <p>
+        And we are mostly done now.
+    </p>
+    <p>
+        Whenever you need to launch a new version you have to create a tag with a title that follows <a href="https://semver.org/" target="_blank">semantic versioning</a> and
+        if you need to add release notes with your version in the Play Store you can add a message to your tag and it will be added too.
+    </p>
+    <h3 id="#test">Conclusion</h3>
+    <p>
+        I wrote this example because it may be easier to understand and setup your CI/CD pipeline with this guide and you don't have to use
+        third parties to build your application or test it.
+    </p>
+    <p>
+        You could also remove the Appcenter dependency from the pipeline by using the Play Store API directly.
+    </p>
+    <p>
+        I hope you enjoyed reading this guide, have a wonderful day!
+    </p>
+  </body>
+</html> 

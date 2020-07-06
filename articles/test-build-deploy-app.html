@@ -140,7 +140,7 @@ base64 myapp.keystore > base64keystore.txt
         You also need to set up <strong>KEYSTORE_PASSWORD</strong> and <strong>KEYSTORE_ALIAS</strong> there (I will be using the same string for storePassword and keyPassword).
     </p>
     <p>
-        Now instead of using gradle.properties to retrieve the keystore alias, path and password for our build we will use the ENV.
+        Now, instead of using gradle.properties to retrieve the keystore alias, path and password for our build, we will use the ENV.
     </p>
 <code><pre>
 def keystorePath = System.getenv("MYAPP_UPLOAD_STORE_FILE")
@@ -155,7 +155,7 @@ versionCode System.getenv("MYAPP_VERSION_CODE") as Integer ?: 1
 versionName System.getenv("MYAPP_VERSION_NAME") ?: "0.0.0"
 </pre></code>
 <p>
-    Once we have gradle ready to accept envs we write the bash script needed in order to work with our CI.
+    Once we have gradle ready to accept envs we can write the bash script needed in order to work with our CI.
 </p>
 <code><pre>
 #!/usr/bin/env bash
@@ -198,7 +198,7 @@ else
 fi
 </pre></code>
 <p>
-    With the bash script done (I named it build-release.sh) the only thing left to set up is our CI job.
+    With the bash script done (I named it build-release.sh), it is time set up our CI job.
 </p>
 <code><pre>
 android:build:
@@ -213,14 +213,13 @@ android:build:
 </pre></code>
     <h3 id="#test">Deploy</h3>
     <p>
-        For deployment we will use <a href="https://appcenter.ms/" target="_blank">Appcenter</a> which is free for us. You should have an account there (it isn't required to give them
-        any access to your repository).
+        For deployment we will use <a href="https://appcenter.ms/" target="_blank">Appcenter</a> (it is free for our use and access to your repo is not required as it will only be used to upload the bundle to the store).
     </p>
     <p>
         After creating an account you should follow their guide to <a href="https://docs.microsoft.com/en-us/appcenter/distribution/stores/googleplay" target="_blank">connect the Google Play Store with the Appcenter</a>.
     </p>
     <p>
-        Now configure a new variable in the Gitlab variables section and add your Appcenter token there.
+        Then, configure a new variable in the Gitlab variables section and add your Appcenter token there.
     </p>
     <p>
         The only thing left to do now is configure the CI to deploy our application to a track (Alpha, Beta, Production).

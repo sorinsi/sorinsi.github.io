@@ -32,10 +32,10 @@
     <hr/>
     <h3 id="#introduction">Introduction</h3>
     <p>
-       Most CI/CD examples use Fastlane to deploy the application but we will use Gitlab CI and Appcenter CLI to do everything which is way easier to configure.
+       Most CI/CD examples use Fastlane to deploy the application however we will use Gitlab CI and Appcenter CLI to do everything which is way easier to configure.
     </p>
     <p>
-       <strong>In this example I will only build and deploy for Android but I will give pointers on how to do it for iOS because the configuration won't change much between platforms.</strong>
+       <strong>In this example we will only build and deploy for Android but I will try to give pointers on how to do it for iOS because the configuration won't change much between platforms.</strong>
     </p>
     <p>
         Short summary of what we will be doing:
@@ -50,7 +50,7 @@
     </p>
     <h3 id="#ci">Gitlab CI</h3>
     <p>
-        We must define a base for our CI in order to be able to share configuration between jobs.
+        We must define a base for our CI in order to be able to share the configuration between jobs.
     </p>    
     <p>
         Please read the comments in the code below for an explanation about what we do.   
@@ -95,7 +95,7 @@ cache: &global_cache
 </p>
     <h3 id="#test">Test</h3>
     <p>
-        This is the easiest step of all, we simply use the Alpine version of Node for Docker in order to test our application.
+        This is the easiest step. All we have to do is use the Alpine version of Node for Docker in order to test our application.
     </p>
     <p>
         I am using an older version of Node in this case because there are a few libraries that won't build correctly on
@@ -118,7 +118,7 @@ test:
 </pre></code>
     <h3 id="#test">Build</h3>
     <p>
-        This is the most complex step in our example on how to configure everything.
+        This is the most complex step in our example on how to put everything together.
     </p>
     <p>
         First of all, check this official guide on <a href="https://reactnative.dev/docs/signed-apk-android" target="_blank">"Publishing to Google Play Store"</a>. You need to generate a keystore in

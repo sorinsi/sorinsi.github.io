@@ -222,7 +222,7 @@ android:build:
         Then, configure a new variable in the Gitlab variables section and add your Appcenter token there.
     </p>
     <p>
-        The only thing left to do now is configure the CI to deploy our application to a track (Alpha, Beta, Production).
+        The only thing left is configure the CI to deploy our application to a track (Alpha, Beta, Production).
     </p>
     <code><pre>
 android:beta:
@@ -243,19 +243,14 @@ android:beta:
     - appcenter distribute stores publish --file $ANDROID_FILE --store Beta --app APPCENTER_APP --release-notes "$TAG_MESSAGE"
     </pre></code>
     <p>
-        And we are mostly done now.
-    </p>
-    <p>
-        Whenever you need to launch a new version you have to create a tag with a title that follows <a href="https://semver.org/" target="_blank">semantic versioning</a> and
-        if you need to add release notes with your version in the Play Store you can add a message to your tag and it will be added too.
+        Whenever you need to launch a new version you will have to create a tag with a title that follows the <a href="https://semver.org/" target="_blank">semantic versioning</a>. If you want to add release notes with your version in the Play Store you will be able to do so by adding a message to your tag which will be included as a release note.
     </p>
     <h3 id="#test">Conclusion</h3>
     <p>
-        I wrote this example because it may be easier to understand and setup your CI/CD pipeline with this guide and you don't have to use
-        third parties to build your application or test it.
+        I wrote this example because it may be easier to understand and setup your CI/CD pipeline instead of using third parties to build your application or test it.
     </p>
     <p>
-        You could also remove the Appcenter dependency from the pipeline by using the Play Store API directly or simply use Gradle to do everything.
+        You could also remove the Appcenter dependency from the pipeline by using the Play Store API or gradle.
     </p>
     <p>
         I hope you enjoyed reading this guide, have a wonderful day!
